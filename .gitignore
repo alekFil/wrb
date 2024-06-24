@@ -1,1 +1,5 @@
-.conda/
+.conda
+secrets.ini
+wrb_log.log
+.vscode
+**/__pycache__
