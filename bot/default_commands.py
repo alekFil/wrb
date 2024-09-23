@@ -1,3 +1,5 @@
+import csv
+import os
 from datetime import datetime, timedelta
 
 from aiogram import F, Router, types
@@ -82,25 +84,56 @@ async def echo(message: Message, state: FSMContext):
     await state.update_data(time_tasks=time_tasks)
     await state.update_data(time_last_task=None)
     await state.update_data(last_task=None)
+    await state.update_data(start_game=None)
     await state.set_state(ChooseParams.game)
 
 
 @router.callback_query(ChooseParams.game, F.data.startswith("start_task__"))
 async def price_chosen(callback: types.CallbackQuery, state: FSMContext):
     user_data = await state.get_data()
-    tasks = user_data["tasks"]
-    time_tasks = user_data["time_tasks"]
-    last_task = user_data["last_task"]
-    time_last_task = user_data["time_last_task"]
+    start_game = user_data.get("start_game")
+    tasks = user_data.get("tasks", {})
+    time_tasks = user_data.get("time_tasks", {})
+    last_task = user_data.get("last_task")
+    time_last_task = user_data.get("time_last_task")
     action = callback.data.split("__")[1]
 
     now_time = datetime.now()
+    if start_game is None:
+        start_game = now_time
+        await state.update_data(start_game=start_game)
 
     if time_last_task is not None:
         delta_last_task = now_time - time_last_task
         time_tasks[int(last_task)] += delta_last_task
 
-    now_time_text = "{0:%d} {0:%b} {0:%Y} at {0:%H}-{0:%M}".format(now_time)
+        # запись данных в CSV файл
+        task_name = tasks[int(last_task)]
+        start_time = time_last_task
+        end_time = now_time
+        duration = delta_last_task
+
+        csv_file = "task_times.csv"
+        file_exists = os.path.isfile(csv_file)
+        with open(csv_file, "a", newline="", encoding="utf-8") as csvfile:
+            fieldnames = ["Task Name", "Start Time", "End Time", "Duration"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            if not file_exists:
+                writer.writeheader()
+
+            writer.writerow(
+                {
+                    "Task Name": task_name,
+                    "Start Time": start_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "End Time": end_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "Duration": str(duration),
+                }
+            )
+
+    start_game_time_text = "{0:%d} {0:%b} {0:%Y} at {0:%H}-{0:%M}-{0:%S}".format(
+        start_game
+    )
 
     time_text = ""
     for elem in time_tasks:
@@ -114,12 +147,12 @@ async def price_chosen(callback: types.CallbackQuery, state: FSMContext):
         )
 
     game_text = (
-        f"Текущая задача:\n"
-        f"{tasks[int(action)][:15]+'...'}\n"
-        f"Начало ее выполнения \n"
-        f" - {now_time_text}.\n\n"
+        f"Начало контроля выполнения задач \n"
+        f" - {start_game_time_text}.\n\n"
         f"Накопленное время выполнения (часы:минуты:секунды):"
-        f"{time_text}"
+        f"{time_text}.\n\n"
+        f"Текущая задача:\n"
+        f"{tasks[int(action)][:15]+'...'}"
     )
 
     builder = InlineKeyboardBuilder()
