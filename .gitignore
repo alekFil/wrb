@@ -3,3 +3,4 @@ secrets.ini
 wrb_log.log
 .vscode
 **/__pycache__
+task_times.csv
